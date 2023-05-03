@@ -104,7 +104,23 @@ function move(b, [r, c], turn) {
 }
 
 function Main() {
-  const [{ board, turn, winner }, setGameState] = useState(initialState());
+  const { games } = useQuery({ games: {} });
+  const label = "new";
+  const game = games.find((g) => g.id === label);
+  console.log(game);
+  if (!game) {
+    return (
+      <div>
+        <button
+          onClick={() => transact(tx.games[label].update(initialState()))}
+        >
+          New Game!
+        </button>
+      </div>
+    );
+  }
+
+  const { board, turn, winner } = game;
   return (
     <div>
       {winner ? <h1>{winner} wins!</h1> : <h1>{turn} turn!</h1>}
@@ -116,7 +132,7 @@ function Main() {
               onClick={() =>
                 !winner &&
                 !board[r][c] &&
-                setGameState(move(board, [r, c], turn))
+                transact(tx.games[label].update(move(board, [r, c], turn)))
               }
             >
               {sq}
@@ -124,7 +140,12 @@ function Main() {
           ))}
         </div>
       ))}
-      <button onClick={() => setGameState(initialState())}>New Game!</button>
+      <button onClick={() => transact(tx.games[label].update(initialState()))}>
+        New Game!
+      </button>
+      <button onClick={() => transact(tx.games[label].delete())}>
+        Delete Game!
+      </button>
     </div>
   );
 }
