@@ -1,13 +1,9 @@
-import "./App.css";
-
 import assert from "assert";
 
 import { useState } from "react";
 
-// 1. Import Instant
 import { useInit, useQuery, tx, transact, id } from "@instantdb/react";
 
-// 2. Get your app id
 const APP_ID = "e836610f-502f-4caa-92d8-3be67fc6a55a";
 
 function App() {
@@ -34,7 +30,7 @@ function initialState() {
       [undefined, undefined, undefined],
     ],
     turn: "x",
-    winner: undefined,
+    outcome: undefined,
   };
 }
 
@@ -42,7 +38,11 @@ function checkRows(b, turn) {
   return b.some((row) => row.every((val) => val === turn));
 }
 
-function isGameOver(b, turn) {
+function isFull(b) {
+  return b.every((row) => row.length && row.every((sq) => sq));
+}
+
+function isGameWon(b, turn) {
   const inverted = b.map((_, col) => [b[0][col], b[1][col], b[2][col]]);
   const diags = [
     [b[0][0], b[1][1], b[2][2]],
@@ -52,7 +52,7 @@ function isGameOver(b, turn) {
   return [b, inverted, diags].some((x) => checkRows(x, turn));
 }
 
-function _isGameOver_test() {
+function _isGameWon_test() {
   let b;
 
   // columns work
@@ -61,7 +61,7 @@ function _isGameOver_test() {
     ["x", "x", "o"],
     ["x", "o", "x"],
   ];
-  assert(isGameOver(b, "x"));
+  assert(isGameWon(b, "x"));
 
   // rows work
   b = [
@@ -69,7 +69,7 @@ function _isGameOver_test() {
     ["x", "o", "o"],
     ["o", "o", "x"],
   ];
-  assert(isGameOver(b, "x"));
+  assert(isGameWon(b, "x"));
 
   // diagnols work
   b = [
@@ -77,7 +77,7 @@ function _isGameOver_test() {
     ["x", "x", "o"],
     ["o", "o", "x"],
   ];
-  assert(isGameOver(b, "x"));
+  assert(isGameWon(b, "x"));
 
   // No false positive
   b = [
@@ -85,7 +85,7 @@ function _isGameOver_test() {
     ["x", "x", "o"],
     ["x", "o", "x"],
   ];
-  assert(!isGameOver(b, "x"));
+  assert(!isGameWon(b, "x"));
 }
 
 function update_in_arr(arr, target, newVal) {
@@ -96,11 +96,32 @@ function update_in_matrix(m, [x, y], newVal) {
   return m.map((row, r) => (r === x ? update_in_arr(row, y, newVal) : row));
 }
 
+function updateOutcome(newBoard, turn) {
+  if (isGameWon(newBoard, turn)) {
+    return turn;
+  }
+
+  if (isFull(newBoard)) {
+    return "draw";
+  }
+}
+
 function move(b, [r, c], turn) {
   const newTurn = turn === "x" ? "o" : "x";
   const newBoard = update_in_matrix(b, [r, c], turn);
-  const newWinner = isGameOver(newBoard, turn) ? turn : undefined;
-  return { board: newBoard, turn: newTurn, winner: newWinner };
+  const newOutcome = updateOutcome(newBoard, turn);
+  return { board: newBoard, turn: newTurn, outcome: newOutcome };
+}
+
+function Button({ onClick, children }) {
+  return (
+    <button
+      className="p-4 border border-solid border-black hover:bg-slate-200"
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
 }
 
 function Main() {
@@ -111,41 +132,55 @@ function Main() {
   if (!game) {
     return (
       <div>
-        <button
+        <Button
           onClick={() => transact(tx.games[label].update(initialState()))}
         >
           New Game!
-        </button>
+        </Button>
       </div>
     );
   }
 
-  const { board, turn, winner } = game;
+  const { board, turn, outcome } = game;
   return (
-    <div>
-      {winner ? <h1>{winner} wins!</h1> : <h1>{turn} turn!</h1>}
-      {board.map((row, r) => (
-        <div style={{ display: "flex" }}>
-          {row.map((sq, c) => (
-            <div
-              className="sq"
-              onClick={() =>
-                !winner &&
-                !board[r][c] &&
-                transact(tx.games[label].update(move(board, [r, c], turn)))
-              }
-            >
-              {sq}
-            </div>
-          ))}
+    <div className="min-h-screen flex flex-col items-center justify-center">
+      <h1 className="text-center text-2xl font-bold my-2 capitalize">
+        {outcome
+          ? outcome === "draw"
+            ? `Draw!`
+            : `${outcome} wins!`
+          : `${turn} turn`}
+      </h1>
+      <div className="m-4 w-72">
+        {board.map((row, r) => (
+          <div className="flex">
+            {row.map((sq, c) => (
+              <div
+                className={`flex justify-center w-24 h-24 border-black border-solid border text-lg ${
+                  !sq ? "hover:cursor-pointer hover:bg-slate-200" : ""
+                }`}
+                onClick={() =>
+                  !outcome &&
+                  !board[r][c] &&
+                  transact(tx.games[label].update(move(board, [r, c], turn)))
+                }
+              >
+                <div className="text-7xl">{sq}</div>
+              </div>
+            ))}
+          </div>
+        ))}
+        <div className="m-4 flex justify-between">
+          <Button
+            onClick={() => transact(tx.games[label].update(initialState()))}
+          >
+            New Game
+          </Button>
+          <Button onClick={() => transact(tx.games[label].delete())}>
+            Delete Game
+          </Button>
         </div>
-      ))}
-      <button onClick={() => transact(tx.games[label].update(initialState()))}>
-        New Game!
-      </button>
-      <button onClick={() => transact(tx.games[label].delete())}>
-        Delete Game!
-      </button>
+      </div>
     </div>
   );
 }
