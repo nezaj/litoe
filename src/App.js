@@ -1,9 +1,10 @@
 import assert from "assert";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useInit, useQuery, tx, transact, id } from "@instantdb/react";
 
 import randomHandle from "./utils/randomHandle";
+import Drawer from "./components/Drawer/drawer";
 
 // Game logic
 // --------------------
@@ -82,6 +83,7 @@ function updateOutcome(newBoard, currentPlayer, mark) {
 
 // State Management
 // --------------------
+
 const MARKER = { 0: "x", 1: "o" };
 function getMarker(idx) {
   return MARKER[idx];
@@ -126,11 +128,20 @@ function addPlayer(game, id) {
   return { ...game, players: [...newPlayers] };
 }
 
+function removePlayer(game, id) {
+  const { players } = game;
+  const newPlayers = players.filter((p) => p !== id);
+  return { ...game, players: [...newPlayers] };
+}
+
 // Consts
 // --------------------
 
 const APP_ID = "e836610f-502f-4caa-92d8-3be67fc6a55a";
 const PLAYER_ID = randomHandle();
+
+// When enabled allows a player to move for their opponent
+const _DEBUG_TURN = true;
 
 // Components
 // --------------------
@@ -163,55 +174,95 @@ function App() {
 
 // Screens
 // --------------------
+function AdminButton({ onClick, children }) {
+  return (
+    <button
+      className="text-sm text-left outline p-2 my-2 hover:bg-slate-400"
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+function AdminBar() {
+  const { games } = useQuery({ games: {} });
+  const deleteAll = () => transact(games.map((g) => tx.games[g.id].delete()));
+  return (
+    <Drawer defaultOpen={true}>
+      <div className="pt-2 px-2">
+        <div className="text-center pb-1">Admin bar</div>
+        <div className="bg-slate-600 pb-1 mb-1"></div>
+        <div className="flex flex-col">
+          <div className="text-xs py-1">** Logged in as: {PLAYER_ID} **</div>
+          <div>Live Rooms: {games.length}</div>
+          <AdminButton onClick={deleteAll}>Delete All Games</AdminButton>
+        </div>
+      </div>
+    </Drawer>
+  );
+}
+
+function gameHeaderText({ players, outcome, turn }) {
+  if (players.length < 2) {
+    return "Waiting for opponent to join...";
+  }
+
+  if (!outcome) {
+    return `Turn: ${players[turn]}`;
+  }
+
+  return outcome === "draw" ? "Draw!" : `${outcome} wins!`;
+}
+
 function Main() {
   const { games } = useQuery({ games: {} });
-  const label = "new";
-  const game = games.find((g) => g.id === label);
-  console.log(game);
-  console.log(PLAYER_ID);
-  if (!game) {
+
+  const [room, setRoom] = useState();
+  const game = room && games.find((g) => g.id === room);
+  if (!room) {
     return (
       <div>
+        <AdminBar />
         <Button
-          onClick={() => transact(tx.games[label].update(initialState()))}
+          onClick={() => {
+            const room = id();
+            const newGame = addPlayer(initialState(), PLAYER_ID);
+            transact(tx.games[room].update(newGame));
+            setRoom(room);
+          }}
         >
-          New Game!
+          Create Game!
         </Button>
+        <div>
+          <h1 className="text-xl my-2 font-bold">Games</h1>
+          {games && (
+            <ul>
+              {games.map((g) => (
+                <li
+                  onClick={() => {
+                    const gid = g.id;
+                    transact(tx.games[gid].update(addPlayer(g, PLAYER_ID)));
+                    setRoom(gid);
+                  }}
+                  key={g.id}
+                >
+                  {g.players[0]}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     );
   }
 
   const { board, turn, outcome, players } = game;
-  if (players.length !== 2) {
-    return (
-      <div className="flex flex-col">
-        Waiting for players to join!
-        <Button
-          onClick={() =>
-            transact(tx.games[label].update(addPlayer(game, PLAYER_ID)))
-          }
-        >
-          Join Game
-        </Button>
-        {players.length > 0 && (
-          <ul>
-            {players.map((p) => (
-              <div key={p}>{p}</div>
-            ))}
-          </ul>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen flex flex-col items-center justify-center">
+      <AdminBar />
       <h1 className="text-center text-2xl font-bold my-2 capitalize">
-        {outcome
-          ? outcome === "draw"
-            ? `Draw!`
-            : `${outcome} wins!`
-          : `Turn: ${players[turn]}`}
+        {gameHeaderText({ players, outcome, turn })}
       </h1>
       <div className="m-4 w-72">
         {board.map((row, r) => (
@@ -219,14 +270,19 @@ function Main() {
             {row.map((sq, c) => (
               <div
                 className={`flex justify-center w-24 h-24 border-black border-solid border text-lg ${
-                  !sq && !outcome
+                  players.length >= 2 &&
+                  !sq &&
+                  !outcome &&
+                  (_DEBUG_TURN || players[turn] === PLAYER_ID)
                     ? "hover:cursor-pointer hover:bg-slate-200"
                     : ""
                 }`}
                 onClick={() =>
+                  players.length >= 2 &&
                   !outcome &&
                   !board[r][c] &&
-                  transact(tx.games[label].update(move(game, [r, c])))
+                  (_DEBUG_TURN || players[turn] === PLAYER_ID) &&
+                  transact(tx.games[room].update(move(game, [r, c])))
                 }
               >
                 <div className="text-7xl">{sq}</div>
@@ -236,12 +292,21 @@ function Main() {
         ))}
         <div className="m-4 flex justify-between">
           <Button
-            onClick={() => transact(tx.games[label].update(resetBoard(game)))}
+            onClick={() => transact(tx.games[room].update(resetBoard(game)))}
           >
             Reset Game
           </Button>
-          <Button onClick={() => transact(tx.games[label].delete())}>
-            Delete Game
+          <Button
+            onClick={() => {
+              players.length === 1
+                ? transact(tx.games[room].delete())
+                : transact(
+                    tx.games[room].update(removePlayer(game, PLAYER_ID))
+                  );
+              setRoom(null);
+            }}
+          >
+            Leave Game
           </Button>
         </div>
         {players.length > 0 && (
