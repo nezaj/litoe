@@ -3,6 +3,7 @@ import assert from "assert";
 import { useState, useEffect } from "react";
 import { useInit, useQuery, tx, transact, id } from "@instantdb/react";
 
+import { updateLocation, deleteLocation } from "./utils/location";
 import randomHandle from "./utils/randomHandle";
 import Drawer from "./components/Drawer/drawer";
 
@@ -128,10 +129,24 @@ function addPlayer(game, id) {
   return { ...game, players: [...newPlayers] };
 }
 
+function hasPlayer(players, id) {
+  return players.indexOf(id) > -1;
+}
+
 function removePlayer(game, id) {
   const { players } = game;
   const newPlayers = players.filter((p) => p !== id);
   return { ...game, players: [...newPlayers] };
+}
+
+// Actions
+// --------------------
+
+function maybeJoin(game, playerId) {
+  const { players, id: gid } = game;
+  if (players.length < 2 && !hasPlayer(players, PLAYER_ID)) {
+    transact(tx.games[gid].update(addPlayer(game, playerId)));
+  }
 }
 
 // Consts
@@ -171,6 +186,20 @@ function App() {
   }
   return <Main />;
 }
+
+// Navigation
+// -----------------
+const getLocationRoom = () => {
+  return new URLSearchParams(window.location.search).get("roomId");
+};
+
+const setLocationRoom = (id) => {
+  updateLocation("roomId", id);
+};
+
+const clearLocationRoom = () => {
+  deleteLocation("roomId");
+};
 
 // Screens
 // --------------------
@@ -218,9 +247,11 @@ function gameHeaderText({ players, outcome, turn }) {
 function Main() {
   const { games } = useQuery({ games: {} });
 
-  const [room, setRoom] = useState();
+  const [room, setRoom] = useState(getLocationRoom());
   const game = room && games.find((g) => g.id === room);
-  if (!room) {
+
+  // Lobby
+  if (!game) {
     return (
       <div>
         <AdminBar />
@@ -229,27 +260,43 @@ function Main() {
             const room = id();
             const newGame = addPlayer(initialState(), PLAYER_ID);
             transact(tx.games[room].update(newGame));
+            setLocationRoom(room);
             setRoom(room);
           }}
         >
           Create Game!
         </Button>
+        <Button
+          onClick={() => {
+            const roomId = id();
+            const newGame = addPlayer(initialState(), PLAYER_ID);
+            transact(tx.games[roomId].update({ ...newGame, private: true }));
+            setLocationRoom(roomId);
+            setRoom(roomId);
+          }}
+        >
+          Create Private Game!
+        </Button>
+
         <div>
           <h1 className="text-xl my-2 font-bold">Games</h1>
           {games && (
             <ul>
-              {games.map((g) => (
-                <li
-                  onClick={() => {
-                    const gid = g.id;
-                    transact(tx.games[gid].update(addPlayer(g, PLAYER_ID)));
-                    setRoom(gid);
-                  }}
-                  key={g.id}
-                >
-                  {g.players[0]}
-                </li>
-              ))}
+              {games
+                .filter((g) => !g.private)
+                .map((g) => (
+                  <li
+                    onClick={() => {
+                      const gid = g.id;
+                      transact(tx.games[gid].update(addPlayer(g, PLAYER_ID)));
+                      setLocationRoom(gid);
+                      setRoom(gid);
+                    }}
+                    key={g.id}
+                  >
+                    {g.players[0]}
+                  </li>
+                ))}
             </ul>
           )}
         </div>
@@ -257,7 +304,9 @@ function Main() {
     );
   }
 
+  // Game
   const { board, turn, outcome, players } = game;
+  maybeJoin(game, PLAYER_ID);
   return (
     <div className="min-h-screen flex flex-col items-center justify-center">
       <AdminBar />
@@ -303,6 +352,7 @@ function Main() {
                 : transact(
                     tx.games[room].update(removePlayer(game, PLAYER_ID))
                   );
+              clearLocationRoom();
               setRoom(null);
             }}
           >
