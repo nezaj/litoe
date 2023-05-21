@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useInit, useQuery, tx, transact, id } from "@instantdb/react";
 
 import { updateLocation, deleteLocation } from "./utils/location";
+import { convertSecondsToMinutesAndSeconds } from "./utils/time";
+
 import randomHandle from "./utils/randomHandle";
 import Drawer from "./components/Drawer/drawer";
 
@@ -104,6 +106,7 @@ function initialState() {
     turn: 0,
     outcome: undefined,
     players: [],
+    clocks: [60, 60],
   };
 }
 
@@ -136,7 +139,7 @@ function hasPlayer(players, id) {
 function removePlayer(game, id) {
   const { players } = game;
   const newPlayers = players.filter((p) => p !== id);
-  return { ...game, players: [...newPlayers] };
+  return { players: [...newPlayers] };
 }
 
 // Actions
@@ -250,6 +253,34 @@ function Main() {
   const [room, setRoom] = useState(getLocationRoom());
   const game = room && games.find((g) => g.id === room);
 
+  // Clock countdown
+  useEffect(() => {
+    if (game) {
+      const { players, clocks, turn, outcome } = game;
+      if (players.length >= 2 && !outcome) {
+        // New clock values
+        const newClocks =
+          turn === 0 ? [clocks[0] - 1, clocks[1]] : [clocks[0], clocks[1] - 1];
+
+        // Account for time over
+        let newUpdates;
+        const timeOverIdx = newClocks.indexOf(0);
+        if (timeOverIdx > -1) {
+          const newOutcome = timeOverIdx === 0 ? players[1] : players[0];
+          newUpdates = { clocks: newClocks, outcome: newOutcome };
+        } else {
+          newUpdates = { clocks: newClocks };
+        }
+
+        const timerId = setInterval(
+          () => transact(tx.games[game.id].update({ ...newUpdates })),
+          1000
+        );
+        return () => clearInterval(timerId);
+      }
+    }
+  }, [game]);
+
   // Lobby
   if (!game) {
     return (
@@ -305,69 +336,101 @@ function Main() {
   }
 
   // Game
-  const { board, turn, outcome, players } = game;
+  const { board, turn, outcome, players, clocks } = game;
   maybeJoin(game, PLAYER_ID);
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center">
-      <AdminBar />
-      <h1 className="text-center text-2xl font-bold my-2 capitalize">
-        {gameHeaderText({ players, outcome, turn })}
-      </h1>
-      <div className="m-4 w-72">
-        {board.map((row, r) => (
-          <div className="flex">
-            {row.map((sq, c) => (
-              <div
-                className={`flex justify-center w-24 h-24 border-black border-solid border text-lg ${
-                  players.length >= 2 &&
-                  !sq &&
-                  !outcome &&
-                  (_DEBUG_TURN || players[turn] === PLAYER_ID)
-                    ? "hover:cursor-pointer hover:bg-slate-200"
-                    : ""
-                }`}
+    <div className="flex">
+      <div className="flex-none w-1/4 p-4">
+        <div className="min-h-screen flex flex-col justify-center">
+          {players.length > 0 && (
+            <div className="space-y-16">
+              <div>
+                <div className="text-2xl">
+                  {convertSecondsToMinutesAndSeconds(clocks[0])}
+                </div>
+                <div
+                  className={`w-full border ${
+                    turn === 0 && !outcome && "border-green-600"
+                  }`}
+                ></div>
+                <div className={players[0] === outcome ? "bg-slate-200" : ""}>
+                  {players[0] && `${players[0]} -- ${getMarker(0)}`}
+                </div>
+              </div>
+              <div>
+                <div className={players[1] === outcome ? "bg-slate-200" : ""}>
+                  {players[1] && `${players[1]} -- ${getMarker(1)}`}
+                </div>
+                <div
+                  className={`w-full border ${
+                    turn === 1 && !outcome && "border-green-600"
+                  }`}
+                ></div>
+                <div className="text-2xl">
+                  {convertSecondsToMinutesAndSeconds(clocks[1])}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="flex-none w-1/2 p-4">
+        <div className="min-h-screen flex flex-col items-center justify-center">
+          <AdminBar />
+          <h1 className="text-center text-2xl font-bold my-2 capitalize">
+            {gameHeaderText({ players, outcome, turn })}
+          </h1>
+          <div className="m-4 w-72">
+            {board.map((row, r) => (
+              <div key={`row-${r}`} className="flex">
+                {row.map((sq, c) => (
+                  <div
+                    key={`idx-${r}-${c}`}
+                    className={`flex justify-center w-24 h-24 border-black border-solid border text-lg ${
+                      players.length >= 2 &&
+                      !sq &&
+                      !outcome &&
+                      (_DEBUG_TURN || players[turn] === PLAYER_ID)
+                        ? "hover:cursor-pointer hover:bg-slate-200"
+                        : ""
+                    }`}
+                    onClick={() =>
+                      players.length >= 2 &&
+                      !outcome &&
+                      !board[r][c] &&
+                      (_DEBUG_TURN || players[turn] === PLAYER_ID) &&
+                      transact(tx.games[room].update(move(game, [r, c])))
+                    }
+                  >
+                    <div className="text-7xl">{sq}</div>
+                  </div>
+                ))}
+              </div>
+            ))}
+            <div className="m-4 flex justify-between">
+              <Button
                 onClick={() =>
-                  players.length >= 2 &&
-                  !outcome &&
-                  !board[r][c] &&
-                  (_DEBUG_TURN || players[turn] === PLAYER_ID) &&
-                  transact(tx.games[room].update(move(game, [r, c])))
+                  transact(tx.games[room].update(resetBoard(game)))
                 }
               >
-                <div className="text-7xl">{sq}</div>
-              </div>
-            ))}
+                Reset Game
+              </Button>
+              <Button
+                onClick={() => {
+                  players.length === 1
+                    ? transact(tx.games[room].delete())
+                    : transact(
+                        tx.games[room].update(removePlayer(game, PLAYER_ID))
+                      );
+                  clearLocationRoom();
+                  setRoom(null);
+                }}
+              >
+                Leave Game
+              </Button>
+            </div>
           </div>
-        ))}
-        <div className="m-4 flex justify-between">
-          <Button
-            onClick={() => transact(tx.games[room].update(resetBoard(game)))}
-          >
-            Reset Game
-          </Button>
-          <Button
-            onClick={() => {
-              players.length === 1
-                ? transact(tx.games[room].delete())
-                : transact(
-                    tx.games[room].update(removePlayer(game, PLAYER_ID))
-                  );
-              clearLocationRoom();
-              setRoom(null);
-            }}
-          >
-            Leave Game
-          </Button>
         </div>
-        {players.length > 0 && (
-          <ul>
-            {players.map((p, idx) => (
-              <div key={p} className={p === outcome ? "bg-slate-200" : ""}>
-                {p} -- {getMarker(idx)}
-              </div>
-            ))}
-          </ul>
-        )}
       </div>
     </div>
   );
