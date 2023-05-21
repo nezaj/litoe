@@ -11,7 +11,6 @@ import Drawer from "./components/Drawer/drawer";
 
 // Game logic
 // --------------------
-
 function checkRows(b, mark) {
   return b.some((row) => row.every((val) => val === mark));
 }
@@ -86,7 +85,6 @@ function updateOutcome(newBoard, currentPlayer, mark) {
 
 // State Management
 // --------------------
-
 const MARKER = { 0: "x", 1: "o" };
 function getMarker(idx) {
   return MARKER[idx];
@@ -144,7 +142,6 @@ function removePlayer(game, id) {
 
 // Actions
 // --------------------
-
 function maybeJoin(game, playerId) {
   const { players, id: gid } = game;
   if (players.length < 2 && !hasPlayer(players, PLAYER_ID)) {
@@ -154,7 +151,6 @@ function maybeJoin(game, playerId) {
 
 // Consts
 // --------------------
-
 const APP_ID = "e836610f-502f-4caa-92d8-3be67fc6a55a";
 const PLAYER_ID = randomHandle();
 
@@ -163,7 +159,6 @@ const _DEBUG_TURN = true;
 
 // Components
 // --------------------
-
 function Button({ onClick, children }) {
   return (
     <button
