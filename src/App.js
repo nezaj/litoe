@@ -257,7 +257,7 @@ function Main() {
   useEffect(() => {
     if (game) {
       const { players, clocks, turn, outcome } = game;
-      if (players.length >= 2 && !outcome) {
+      if (players.length >= 2 && players[turn] === PLAYER_ID && !outcome) {
         // New clock values
         const newClocks =
           turn === 0 ? [clocks[0] - 1, clocks[1]] : [clocks[0], clocks[1] - 1];
@@ -340,6 +340,7 @@ function Main() {
   maybeJoin(game, PLAYER_ID);
   return (
     <div className="flex">
+      {/* Player list + clocks */}
       <div className="flex-none w-1/4 p-4">
         <div className="min-h-screen flex flex-col justify-center">
           {players.length > 0 && (
@@ -374,6 +375,8 @@ function Main() {
           )}
         </div>
       </div>
+
+      {/* Board */}
       <div className="flex-none w-1/2 p-4">
         <div className="min-h-screen flex flex-col items-center justify-center">
           <AdminBar />
