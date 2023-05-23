@@ -11,66 +11,83 @@ import Drawer from "./components/Drawer/drawer";
 
 // Game logic
 // --------------------
-function checkRows(b, mark) {
-  return b.some((row) => row.every((val) => val === mark));
+/** Returns true if a row contains all of the same markers */
+function checkRows(board, mark) {
+  return board.some((row) => row.every((val) => val === mark));
 }
 
-function isFull(b) {
-  return b.every((row) => row.length && row.every((sq) => sq));
+/** Returns true if all entries of a board are full */
+function isFull(board) {
+  return board.every((row) => row.length && row.every((sq) => sq));
 }
 
-function isGameWon(b, mark) {
-  const inverted = b.map((_, col) => [b[0][col], b[1][col], b[2][col]]);
+/** Returns true if there is a win condition (checks rows, columns, diagonals) */
+function isGameWon(board, mark) {
+  const inverted = board.map((_, col) => [
+    board[0][col],
+    board[1][col],
+    board[2][col],
+  ]);
   const diags = [
-    [b[0][0], b[1][1], b[2][2]],
-    [b[0][2], b[1][1], b[2][0]],
+    [board[0][0], board[1][1], board[2][2]],
+    [board[0][2], board[1][1], board[2][0]],
   ];
 
-  return [b, inverted, diags].some((x) => checkRows(x, mark));
+  return [board, inverted, diags].some((x) => checkRows(x, mark));
 }
 
-function _isGameWon_test() {
-  let b;
+/** We consider a game started once there has been at least two moves */
+function hasGameStarted(board) {
+  return board.flat().filter((x) => x).length > 1;
+}
+
+/** Tests our win condition logic
+ * (TODO): Move this to a separate file
+ */
+function _isGameWonTest() {
+  let board;
 
   // columns work
-  b = [
+  board = [
     ["x", "o", "x"],
     ["x", "x", "o"],
     ["x", "o", "x"],
   ];
-  assert(isGameWon(b, "x"));
+  assert(isGameWon(board, "x"));
 
   // rows work
-  b = [
+  board = [
     ["x", "x", "x"],
     ["x", "o", "o"],
     ["o", "o", "x"],
   ];
-  assert(isGameWon(b, "x"));
+  assert(isGameWon(board, "x"));
 
   // diagnols work
-  b = [
+  board = [
     ["x", "o", "x"],
     ["x", "x", "o"],
     ["o", "o", "x"],
   ];
-  assert(isGameWon(b, "x"));
+  assert(isGameWon(board, "x"));
 
   // No false positive
-  b = [
+  board = [
     ["o", "x", "o"],
     ["x", "x", "o"],
     ["x", "o", "x"],
   ];
-  assert(!isGameWon(b, "x"));
+  assert(!isGameWon(board, "x"));
 }
 
-function update_in_arr(arr, target, newVal) {
+/** Return a new array with value replaced at target index */
+function updateInArr(arr, target, newVal) {
   return arr.map((val, i) => (i === target ? newVal : val));
 }
 
-function update_in_matrix(m, [x, y], newVal) {
-  return m.map((row, r) => (r === x ? update_in_arr(row, y, newVal) : row));
+/** Return a new 2D array with value replaced at target coordinates */
+function updateInMatrix(m, [x, y], newVal) {
+  return m.map((row, r) => (r === x ? updateInArr(row, y, newVal) : row));
 }
 
 function updateOutcome(newBoard, currentPlayer, mark) {
@@ -90,6 +107,7 @@ function getMarker(idx) {
   return MARKER[idx];
 }
 
+/** Returns empty board state */
 function emptyBoard() {
   return [
     [undefined, undefined, undefined],
@@ -98,55 +116,122 @@ function emptyBoard() {
   ];
 }
 
+/** Returns initial game state */
 function initialState() {
   return {
     board: emptyBoard(),
     turn: 0,
-    outcome: undefined,
+    outcome: null,
     players: [],
     clocks: [60, 60],
+    rematchId: null,
   };
 }
 
-function resetBoard(game) {
+/** Returns an update to reset game state */
+function resetGameState(game, opts = {}) {
   const { players } = game;
+  const { reversePlayers } = opts;
   const newGame = initialState();
-  return { ...newGame, players };
+  return {
+    ...newGame,
+    players: reversePlayers ? players.slice().reverse() : players,
+  };
 }
 
+/** Given a game and coordinates for a move, returns an update to alter game state */
 function move(game, [r, c]) {
   const { board, turn, players } = game;
   const mark = getMarker(turn);
   const currentPlayer = players[turn];
   const newTurn = turn === 0 ? 1 : 0;
-  const newBoard = update_in_matrix(board, [r, c], mark);
+  const newBoard = updateInMatrix(board, [r, c], mark);
   const newOutcome = updateOutcome(newBoard, currentPlayer, mark);
   return { ...game, board: newBoard, turn: newTurn, outcome: newOutcome };
 }
 
+/** Returns an update to add a player to a game */
 function addPlayer(game, id) {
   const { players } = game;
   const newPlayers = new Set([...players, id]);
   return { ...game, players: [...newPlayers] };
 }
 
-function hasPlayer(players, id) {
-  return players.indexOf(id) > -1;
-}
-
+/** Returns an update to remove a player from a game */
 function removePlayer(game, id) {
   const { players } = game;
   const newPlayers = players.filter((p) => p !== id);
   return { players: [...newPlayers] };
 }
 
+/** Returns game data for a roomId */
+function findGame(games, roomId) {
+  return roomId && games.find((g) => g.id === roomId);
+}
+
+/** Returns the opponent player id */
+function getOpponentId(players, playerId) {
+  if (isObserver(players, playerId)) {
+    console.warn(
+      "[getOpponet] should only called be called with a valid player"
+    );
+    return;
+  }
+  const idx = players.indexOf(playerId);
+  return idx === 0 ? players[1] : players[0];
+}
+
+/** Return if a player is part of game */
+function isPlayer(players, playerId) {
+  return players.indexOf(playerId) > -1;
+}
+
+/** Return if a player is an observer of game */
+function isObserver(players, playerId) {
+  return !isPlayer(players, playerId);
+}
+
+/** Return if an outcome has been determined */
+function isOutcome(game) {
+  const { outcome } = game;
+  return !!outcome;
+}
+
+/** Returns if a rematch has been offerred */
+function isRematch(game) {
+  const { rematchId } = game;
+  return !!rematchId;
+}
+
+/** Return if player was offered a rematch */
+function isRematchPlayer(game, playerId) {
+  const { rematchId } = game;
+  return playerId === rematchId;
+}
+
 // Actions
 // --------------------
+/** Reset game state */
+function resetGame(game, opts = {}) {
+  const { id: roomId } = game;
+  transact(tx.games[roomId].update(resetGameState(game, opts)));
+}
+
+/** Adds a player to the game if there is space */
 function maybeJoin(game, playerId) {
-  const { players, id: gid } = game;
-  if (players.length < 2 && !hasPlayer(players, PLAYER_ID)) {
-    transact(tx.games[gid].update(addPlayer(game, playerId)));
+  const { players, id: roomId } = game;
+  if (players.length < 2 && !isPlayer(players, PLAYER_ID)) {
+    transact(tx.games[roomId].update(addPlayer(game, playerId)));
   }
+}
+
+/** Offers rematch to player's opponent */
+function offerRematch(game, playerId) {
+  const { id: roomId, rematchId, players } = game;
+  const newUpdate = rematchId
+    ? resetGameState(game, { reversePlayers: true })
+    : { rematchId: getOpponentId(players, playerId) };
+  transact(tx.games[roomId].update(newUpdate));
 }
 
 // Consts
@@ -159,11 +244,16 @@ const _DEBUG_TURN = true;
 
 // Components
 // --------------------
-function Button({ onClick, children }) {
+function Button({ onClick, children, disabled }) {
   return (
     <button
-      className="p-4 border border-solid border-black hover:bg-slate-200"
+      className={`p-4 border border-solid ${
+        disabled
+          ? "text-gray-300 border-gray-300"
+          : "border-black hover:bg-slate-200"
+      }`}
       onClick={onClick}
+      disabled={disabled}
     >
       {children}
     </button>
@@ -212,8 +302,11 @@ function AdminButton({ onClick, children }) {
   );
 }
 
-function AdminBar() {
+function AdminBar({ setRoomId }) {
   const { games } = useQuery({ games: {} });
+  const roomId = getLocationRoom();
+  const game = roomId && findGame(games, roomId);
+
   const deleteAll = () => transact(games.map((g) => tx.games[g.id].delete()));
   return (
     <Drawer defaultOpen={true}>
@@ -222,8 +315,27 @@ function AdminBar() {
         <div className="bg-slate-600 pb-1 mb-1"></div>
         <div className="flex flex-col">
           <div className="text-xs py-1">** Logged in as: {PLAYER_ID} **</div>
+          {game && (
+            <div className="text-xs py-1">
+              <div>Current room</div>
+              <div className="mt-1">{roomId}</div>
+            </div>
+          )}
           <div>Live Rooms: {games.length}</div>
-          <AdminButton onClick={deleteAll}>Delete All Games</AdminButton>
+          <AdminButton
+            onClick={() => {
+              clearLocationRoom();
+              setRoomId(null);
+              deleteAll();
+            }}
+          >
+            Delete All Games
+          </AdminButton>
+          {game && (
+            <AdminButton onClick={() => resetGame(game)}>
+              Reset Game
+            </AdminButton>
+          )}
         </div>
       </div>
     </Drawer>
@@ -245,8 +357,8 @@ function gameHeaderText({ players, outcome, turn }) {
 function Main() {
   const { games } = useQuery({ games: {} });
 
-  const [room, setRoom] = useState(getLocationRoom());
-  const game = room && games.find((g) => g.id === room);
+  const [roomId, setRoomId] = useState(getLocationRoom());
+  const game = findGame(games, roomId);
 
   // Clock countdown
   useEffect(() => {
@@ -280,14 +392,14 @@ function Main() {
   if (!game) {
     return (
       <div>
-        <AdminBar />
+        <AdminBar setRoomId={setRoomId} />
         <Button
           onClick={() => {
-            const room = id();
+            const roomId = id();
             const newGame = addPlayer(initialState(), PLAYER_ID);
-            transact(tx.games[room].update(newGame));
-            setLocationRoom(room);
-            setRoom(room);
+            transact(tx.games[roomId].update(newGame));
+            setLocationRoom(roomId);
+            setRoomId(roomId);
           }}
         >
           Create Game!
@@ -298,25 +410,38 @@ function Main() {
             const newGame = addPlayer(initialState(), PLAYER_ID);
             transact(tx.games[roomId].update({ ...newGame, private: true }));
             setLocationRoom(roomId);
-            setRoom(roomId);
+            setRoomId(roomId);
           }}
         >
           Create Private Game!
         </Button>
+        <Button
+          onClick={() => {
+            const newRoomId = window.prompt("Enter roomId");
+            if (newRoomId && findGame(games, newRoomId)) {
+              setLocationRoom(newRoomId);
+              setRoomId(newRoomId);
+            }
+          }}
+        >
+          Join Private Game
+        </Button>
 
         <div>
           <h1 className="text-xl my-2 font-bold">Games</h1>
-          {games && (
+          {games.length > 0 && (
             <ul>
               {games
                 .filter((g) => !g.private)
                 .map((g) => (
                   <li
                     onClick={() => {
-                      const gid = g.id;
-                      transact(tx.games[gid].update(addPlayer(g, PLAYER_ID)));
-                      setLocationRoom(gid);
-                      setRoom(gid);
+                      const roomId = g.id;
+                      transact(
+                        tx.games[roomId].update(addPlayer(g, PLAYER_ID))
+                      );
+                      setLocationRoom(roomId);
+                      setRoomId(roomId);
                     }}
                     key={g.id}
                   >
@@ -353,6 +478,65 @@ function Main() {
                   {players[0] && `${players[0]} -- ${getMarker(0)}`}
                 </div>
               </div>
+
+              <div className="flex">
+                <Button
+                  onClick={() => {
+                    players.length === 1
+                      ? transact(tx.games[roomId].delete())
+                      : transact(
+                          tx.games[roomId].update(removePlayer(game, PLAYER_ID))
+                        );
+                    clearLocationRoom();
+                    setRoomId(null);
+                  }}
+                  disabled={
+                    isPlayer(players, PLAYER_ID) &&
+                    hasGameStarted(board) &&
+                    !isOutcome(game)
+                  }
+                >
+                  Leave game
+                </Button>
+                <Button
+                  onClick={() => {
+                    const ok = window.confirm("Are you sure?");
+                    if (ok) {
+                      const playerIdx = players.indexOf(PLAYER_ID);
+                      const winner = playerIdx === 0 ? players[1] : players[0];
+                      transact(tx.games[roomId].update({ outcome: winner }));
+                    }
+                  }}
+                  disabled={
+                    isObserver(players, PLAYER_ID) ||
+                    (isPlayer(players, PLAYER_ID) && !hasGameStarted(board)) ||
+                    isOutcome(game)
+                  }
+                >
+                  Forfeit game
+                </Button>
+              </div>
+              <div>
+                {isRematchPlayer(game, PLAYER_ID) ? (
+                  <Button
+                    onClick={() => resetGame(game, { reversePlayers: true })}
+                  >
+                    Accept rematch
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => offerRematch(game, PLAYER_ID)}
+                    disabled={
+                      isObserver(players, PLAYER_ID) ||
+                      (isPlayer(players, PLAYER_ID) && !isOutcome(game)) ||
+                      isRematch(game)
+                    }
+                  >
+                    {isRematch(game) ? "Rematch offered" : "Offer rematch"}
+                  </Button>
+                )}
+              </div>
+
               <div>
                 <div className={players[1] === outcome ? "bg-slate-200" : ""}>
                   {players[1] && `${players[1]} -- ${getMarker(1)}`}
@@ -374,7 +558,7 @@ function Main() {
       {/* Board */}
       <div className="flex-none w-1/2 p-4">
         <div className="min-h-screen flex flex-col items-center justify-center">
-          <AdminBar />
+          <AdminBar setRoomId={setRoomId} />
           <h1 className="text-center text-2xl font-bold my-2 capitalize">
             {gameHeaderText({ players, outcome, turn })}
           </h1>
@@ -397,7 +581,7 @@ function Main() {
                       !outcome &&
                       !board[r][c] &&
                       (_DEBUG_TURN || players[turn] === PLAYER_ID) &&
-                      transact(tx.games[room].update(move(game, [r, c])))
+                      transact(tx.games[roomId].update(move(game, [r, c])))
                     }
                   >
                     <div className="text-7xl">{sq}</div>
@@ -405,28 +589,6 @@ function Main() {
                 ))}
               </div>
             ))}
-            <div className="m-4 flex justify-between">
-              <Button
-                onClick={() =>
-                  transact(tx.games[room].update(resetBoard(game)))
-                }
-              >
-                Reset Game
-              </Button>
-              <Button
-                onClick={() => {
-                  players.length === 1
-                    ? transact(tx.games[room].delete())
-                    : transact(
-                        tx.games[room].update(removePlayer(game, PLAYER_ID))
-                      );
-                  clearLocationRoom();
-                  setRoom(null);
-                }}
-              >
-                Leave Game
-              </Button>
-            </div>
           </div>
         </div>
       </div>
