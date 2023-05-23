@@ -234,6 +234,20 @@ function offerRematch(game, playerId) {
   transact(tx.games[roomId].update(newUpdate));
 }
 
+// Navigation
+// -----------------
+const getLocationRoom = () => {
+  return new URLSearchParams(window.location.search).get("roomId");
+};
+
+const setLocationRoom = (id) => {
+  updateLocation("roomId", id);
+};
+
+const clearLocationRoom = () => {
+  deleteLocation("roomId");
+};
+
 // Consts
 // --------------------
 const APP_ID = "e836610f-502f-4caa-92d8-3be67fc6a55a";
@@ -244,6 +258,17 @@ const _DEBUG_TURN = true;
 
 // Components
 // --------------------
+function AdminButton({ onClick, children }) {
+  return (
+    <button
+      className="text-sm text-left outline p-2 my-2 hover:bg-slate-400"
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
 function Button({ onClick, children, disabled }) {
   return (
     <button
@@ -275,33 +300,8 @@ function App() {
   return <Main />;
 }
 
-// Navigation
-// -----------------
-const getLocationRoom = () => {
-  return new URLSearchParams(window.location.search).get("roomId");
-};
-
-const setLocationRoom = (id) => {
-  updateLocation("roomId", id);
-};
-
-const clearLocationRoom = () => {
-  deleteLocation("roomId");
-};
-
 // Screens
 // --------------------
-function AdminButton({ onClick, children }) {
-  return (
-    <button
-      className="text-sm text-left outline p-2 my-2 hover:bg-slate-400"
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  );
-}
-
 function AdminBar({ setRoomId }) {
   const { games } = useQuery({ games: {} });
   const roomId = getLocationRoom();
