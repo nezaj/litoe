@@ -1,13 +1,28 @@
 import assert from "assert";
 
 import { useState, useEffect } from "react";
-import { useInit, useQuery, tx, transact, id } from "@instantdb/react";
+import { init, useQuery, tx, transact, id } from "@instantdb/react";
 
 import { updateLocation, deleteLocation } from "./utils/location";
 import { convertSecondsToMinutesAndSeconds } from "./utils/time";
 
 import randomHandle from "./utils/randomHandle";
 import Drawer from "./components/Drawer/drawer";
+
+// Consts
+// --------------------
+const APP_ID = "e836610f-502f-4caa-92d8-3be67fc6a55a";
+const PLAYER_ID = randomHandle();
+
+// When enabled allows a player to move for their opponent
+const _DEBUG_TURN = true;
+
+// Instant
+// --------------------
+init({
+  appId: APP_ID,
+  websocketURI: "wss://api.instantdb.com/runtime/session",
+});
 
 // Game logic
 // --------------------
@@ -248,14 +263,6 @@ const clearLocationRoom = () => {
   deleteLocation("roomId");
 };
 
-// Consts
-// --------------------
-const APP_ID = "e836610f-502f-4caa-92d8-3be67fc6a55a";
-const PLAYER_ID = randomHandle();
-
-// When enabled allows a player to move for their opponent
-const _DEBUG_TURN = true;
-
 // Components
 // --------------------
 function AdminButton({ onClick, children }) {
@@ -286,24 +293,16 @@ function Button({ onClick, children, disabled }) {
 }
 
 function App() {
-  const [isLoading, error, auth] = useInit({
-    appId: APP_ID,
-    websocketURI: "wss://api.instantdb.com/runtime/sync",
-    apiURI: "https://api.instantdb.com",
-  });
-  if (isLoading) {
-    return <div>...</div>;
-  }
-  if (error) {
-    return <div>Oi! {error?.message}</div>;
-  }
-  return <Main />;
+  const { isLoading, error, data } = useQuery({ games: {} });
+  if (isLoading) return <div>Loading ...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+
+  return <Main data={data} />;
 }
 
 // Screens
 // --------------------
-function AdminBar({ setRoomId }) {
-  const { games } = useQuery({ games: {} });
+function AdminBar({ games, setRoomId }) {
   const roomId = getLocationRoom();
   const game = roomId && findGame(games, roomId);
 
@@ -354,8 +353,8 @@ function gameHeaderText({ players, outcome, turn }) {
   return outcome === "draw" ? "Draw!" : `${outcome} wins!`;
 }
 
-function Main() {
-  const { games } = useQuery({ games: {} });
+function Main({ data }) {
+  const { games } = data;
 
   const [roomId, setRoomId] = useState(getLocationRoom());
   const game = findGame(games, roomId);
@@ -392,7 +391,7 @@ function Main() {
   if (!game) {
     return (
       <div>
-        <AdminBar setRoomId={setRoomId} />
+        <AdminBar games={games} setRoomId={setRoomId} />
         <Button
           onClick={() => {
             const roomId = id();
@@ -558,7 +557,7 @@ function Main() {
       {/* Board */}
       <div className="flex-none w-1/2 p-4">
         <div className="min-h-screen flex flex-col items-center justify-center">
-          <AdminBar setRoomId={setRoomId} />
+          <AdminBar games={games} setRoomId={setRoomId} />
           <h1 className="text-center text-2xl font-bold my-2 capitalize">
             {gameHeaderText({ players, outcome, turn })}
           </h1>
