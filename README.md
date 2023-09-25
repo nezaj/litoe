@@ -1,6 +1,6 @@
 # Litoe
 
-Multiplayer tic-tac-toe ala Instant. [See it live](litoe-app.vercel.app)
+Multiplayer tic-tac-toe ala Instant. [See it live](https://litoe-app.vercel.app)
 
 ### Quickstart
 
