@@ -15,7 +15,7 @@ const APP_ID = "e836610f-502f-4caa-92d8-3be67fc6a55a";
 const PLAYER_ID = randomHandle();
 
 // When enabled allows a player to move for their opponent
-const _DEBUG_TURN = true;
+const _DEBUG_TURN = false;
 
 // Instant
 // --------------------
