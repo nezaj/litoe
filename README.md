@@ -6,8 +6,8 @@ Multiplayer tic-tac-toe ala Instant. [See it live](https://litoe-app.vercel.app)
 
 ```
 git clone ...
-npm i
-npm run start
+yarn
+make dev
 ```
 
 Tic-tac-toe should now be in the browswer, and it should work with multiple tabs! Huzzah!
