@@ -276,14 +276,14 @@ function AdminButton({ onClick, children }) {
   );
 }
 
-function Button({ onClick, children, disabled }) {
+function Button({ onClick, children, disabled, className }) {
   return (
     <button
       className={`p-4 border border-solid ${
         disabled
           ? "text-gray-300 border-gray-300"
           : "border-black hover:bg-slate-200"
-      }`}
+      } ${className}`}
       onClick={onClick}
       disabled={disabled}
     >
@@ -388,11 +388,13 @@ function Main({ data }) {
   }, [game]);
 
   // Lobby
+  const deleteAll = () => transact(games.map((g) => tx.games[g.id].delete()));
   if (!game) {
     return (
-      <div>
+      <div className="m-4">
         {_DEBUG_TURN && <AdminBar games={games} setRoomId={setRoomId} />}
         <Button
+          className="mr-2"
           onClick={() => {
             const roomId = id();
             const newGame = addPlayer(initialState(), PLAYER_ID);
@@ -404,6 +406,7 @@ function Main({ data }) {
           Create Game!
         </Button>
         <Button
+          className="mr-2"
           onClick={() => {
             const roomId = id();
             const newGame = addPlayer(initialState(), PLAYER_ID);
@@ -427,13 +430,14 @@ function Main({ data }) {
         </Button>
 
         <div>
-          <h1 className="text-xl my-2 font-bold">Games</h1>
+          <h1 className="text-xl font-bold my-4">Games</h1>
           {games.length > 0 && (
-            <ul>
+            <ul className="flex flex-col w-1/3 my-2">
               {games
                 .filter((g) => !g.private)
                 .map((g) => (
-                  <li
+                  <Button
+                    className="my-2 py-4 border border-black"
                     onClick={() => {
                       const roomId = g.id;
                       transact(
@@ -445,11 +449,20 @@ function Main({ data }) {
                     key={g.id}
                   >
                     {g.players[0]}
-                  </li>
+                  </Button>
                 ))}
             </ul>
           )}
         </div>
+        <AdminButton
+          onClick={() => {
+            clearLocationRoom();
+            setRoomId(null);
+            deleteAll();
+          }}
+        >
+          Delete All Games
+        </AdminButton>
       </div>
     );
   }
