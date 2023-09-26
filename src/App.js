@@ -391,7 +391,7 @@ function Main({ data }) {
   if (!game) {
     return (
       <div>
-        <AdminBar games={games} setRoomId={setRoomId} />
+        {_DEBUG_TURN && <AdminBar games={games} setRoomId={setRoomId} />}
         <Button
           onClick={() => {
             const roomId = id();
@@ -557,7 +557,7 @@ function Main({ data }) {
       {/* Board */}
       <div className="flex-none w-1/2 p-4">
         <div className="min-h-screen flex flex-col items-center justify-center">
-          <AdminBar games={games} setRoomId={setRoomId} />
+          {_DEBUG_TURN && <AdminBar games={games} setRoomId={setRoomId} />}
           <h1 className="text-center text-2xl font-bold my-2 capitalize">
             {gameHeaderText({ players, outcome, turn })}
           </h1>
